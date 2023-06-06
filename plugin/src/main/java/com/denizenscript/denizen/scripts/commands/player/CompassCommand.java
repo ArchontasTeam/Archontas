@@ -1,6 +1,8 @@
 package com.denizenscript.denizen.scripts.commands.player;
 
+import com.denizenscript.denizen.objects.PlayerTag;
 import com.denizenscript.denizen.utilities.Utilities;
+import com.denizenscript.denizencore.objects.core.ListTag;
 import com.denizenscript.denizencore.utilities.debugging.Debug;
 import com.denizenscript.denizen.objects.LocationTag;
 import com.denizenscript.denizencore.exceptions.InvalidArgumentsException;
@@ -11,20 +13,23 @@ import com.denizenscript.denizencore.scripts.commands.AbstractCommand;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
+import java.util.Collections;
+import java.util.List;
+
 public class CompassCommand extends AbstractCommand {
 
     public CompassCommand() {
         setName("compass");
-        setSyntax("compass [<location>/reset]");
-        setRequiredArguments(1, 1);
+        setSyntax("compass [<location>/reset] (for:<player>|...)");
+        setRequiredArguments(1, 2);
         isProcedural = false;
     }
 
     // <--[command]
     // @Name Compass
-    // @Syntax compass [<location>/reset]
+    // @Syntax compass [<location>/reset] (for:<player>|...)
     // @Required 1
-    // @Maximum 1
+    // @Maximum 2
     // @Short Redirects the player's compass to target the given location.
     // @Group player
     //
@@ -64,7 +69,11 @@ public class CompassCommand extends AbstractCommand {
     @Override
     public void parseArgs(ScriptEntry scriptEntry) throws InvalidArgumentsException {
         for (Argument arg : scriptEntry) {
-            if (!scriptEntry.hasObject("location")
+            if (!scriptEntry.hasObject("players")
+                    && arg.matchesPrefix("for", "players")) {
+                scriptEntry.addObject("players", arg.asType(ListTag.class).filter(PlayerTag.class, scriptEntry));
+            }
+            else if (!scriptEntry.hasObject("location")
                     && arg.matchesArgumentType(LocationTag.class)) {
                 scriptEntry.addObject("location", arg.asType(LocationTag.class));
             }
@@ -79,6 +88,15 @@ public class CompassCommand extends AbstractCommand {
         if (!scriptEntry.hasObject("location") && !scriptEntry.hasObject("reset")) {
             throw new InvalidArgumentsException("Missing location argument!");
         }
+        else if (!scriptEntry.hasObject("players")) {
+            if (!Utilities.entryHasPlayer(scriptEntry)) {
+                throw new InvalidArgumentsException("This command must have a player attached!");
+            }
+            else {
+                scriptEntry.addObject("players",
+                        Collections.singletonList(Utilities.getEntryPlayer(scriptEntry)));
+            }
+        }
 
         scriptEntry.defaultObject("reset", new ElementTag(false));
     }
@@ -87,16 +105,21 @@ public class CompassCommand extends AbstractCommand {
     public void execute(ScriptEntry scriptEntry) {
         LocationTag location = scriptEntry.getObjectTag("location");
         ElementTag reset = scriptEntry.getElement("reset");
-        Player player = Utilities.getEntryPlayer(scriptEntry).getPlayerEntity();
+        List<PlayerTag> players = (List<PlayerTag>) scriptEntry.getObject("players");
         if (scriptEntry.dbCallShouldDebug()) {
-            Debug.report(scriptEntry, getName(), location, reset);
+            Debug.report(scriptEntry, getName(), db("Player(s)", players), location, reset);
         }
         if (reset.asBoolean()) {
-            Location bed = player.getBedSpawnLocation();
-            player.setCompassTarget(bed != null ? bed : player.getWorld().getSpawnLocation());
+            for (PlayerTag player : players) {
+                Player playerEntity = player.getPlayerEntity();
+                Location bed = playerEntity.getBedSpawnLocation();
+                playerEntity.setCompassTarget(bed != null ? bed : player.getWorld().getSpawnLocation());
+            }
         }
         else {
-            player.setCompassTarget(location);
+            for (PlayerTag player : players) {
+                player.getPlayerEntity().setCompassTarget(location);
+            }
         }
     }
 }

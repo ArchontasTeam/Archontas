@@ -1,0 +1,36 @@
+name: Build CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - name: Download Maven
+      run: |
+        curl -sL https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.8.1/apache-maven-3.8.1-bin.zip -o maven.zip
+        apt-get update
+        apt-get -y install unzip
+        unzip -d /usr/share maven.zip
+        rm maven.zip
+        ln -s /usr/share/apache-maven-3.8.1/bin/mvn /usr/bin/mvn
+        echo "M2_HOME=/usr/share/apache-maven-3.8.1" | tee -a /etc/environment
+    - name: Compile Minecraft Spigot (via BuildTools)
+      uses: SpraxDev/Action-SpigotMC@v4.2.0
+      with:
+        versions: 1.19.4, 1.18.2, 1.17.1
+        remapped: true
+    - name: Build with Maven
+      run: mvn package
